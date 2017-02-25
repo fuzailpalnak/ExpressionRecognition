@@ -11,7 +11,7 @@ import cPickle as pickle
 from Facedetection import FaceDetector
 from classifier import SVM
 from gui import BaseLayout
-import pca
+
 import Landmark_Extract
 
 
