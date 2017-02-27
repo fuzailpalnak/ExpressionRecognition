@@ -56,7 +56,9 @@ def get_landmarks(image):
 
     # Draw a rectangle around the faces
     for (x, y, w, h) in faces:
-        #cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        head = cv2.cvtColor(image[y:y + h, x:x + w],
+                            cv2.COLOR_RGB2GRAY)
 
         # Converting the OpenCV rectangle coordinates to Dlib rectangle
         dlib_rect = dlib.rectangle(x.astype(long), y.astype(long), (x + w).astype(long), (y + h).astype(long))
@@ -65,7 +67,7 @@ def get_landmarks(image):
         detected_landmarks = predictor(image, dlib_rect).parts()
 
         landmarks = np.matrix([[p.x, p.y] for p in detected_landmarks])
-    return np.array(landmarks)
+    return np.array(landmarks),(x,y)
 
 
 def make_sets():
@@ -113,6 +115,12 @@ def make_sets():
 
 accur_lin = []
 for i in range(0, 1):
+    a=cv2.imread("/home/palnak/Downloads/happy.jpg")
+    landmark1,(x,y)=get_landmarks(a)
+    landmark12 = np.squeeze(np.array(landmark1.flatten())).astype(np.float32)
+
+
+
     print("Making sets %s" % i)  # Make sets by random sampling 80/20%
     #training_data, training_labels, prediction_data, prediction_labels = make_sets()
     #print "done creating file"
@@ -140,15 +148,18 @@ for i in range(0, 1):
 
     pred_lin = clf.score(X_test, prediction_labels)
     Y_vote= clf.predict(X_test)
-    print np.array(X_test[1])
-
-    print Y_vote
-    print prediction_labels
-    print clf.predict_proba(X_test)
+    y1=clf.predict(landmark12)
+    print y1
+    print clf.predict_proba(landmark12)
     print "linear: ", pred_lin
     accur_lin.append(pred_lin)  # Store accuracy in a list
 
     #confusion = confusion_matrix(prediction_labels, Y_vote)
     #print confusion
-
+    cv2.putText(a, str(y1), (x, y - 20),
+                cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+    cv2.imshow("d",a)
+    cv2.imwrite("happy.jpg",a)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 print("Mean value lin svm: %.3f" % np.mean(accur_lin))  # Get mean accuracy of the 10 runs

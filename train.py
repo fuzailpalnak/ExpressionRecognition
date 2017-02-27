@@ -33,6 +33,7 @@ def main():
     num_classes = len(labels)
     Svm = SVM(labels,num_classes)
     Svm.fit(X_train,y_train)
+    Svm.evaluate(X_test,y_test)
 
 
 if __name__ == '__main__':

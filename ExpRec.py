@@ -179,11 +179,11 @@ class FaceLayout(BaseLayout):
             label = 'happy'
         elif self.sad.GetValue():
             label = 'surprise'
-        elif self.surprised.GetValue():
+        elif self.surprise.GetValue():
             label = 'neutral'
         elif self.angry.GetValue():
             label = 'sad'
-        elif self.disgusted.GetValue():
+        elif self.disgust.GetValue():
             label = 'disgust'
 
         if self.landmark_points is None:

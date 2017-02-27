@@ -40,7 +40,7 @@ class FaceDetector:
 
         # if face is found: extract head region from bounding box
         for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (100, 255, 0), 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
             head = cv2.cvtColor(frame[y:y + h, x:x + w],
                                 cv2.COLOR_RGB2GRAY)
             dlib_rect=dlib.rectangle(x.astype(long), y.astype(long), (x + w).astype(long), (y + h).astype(long))
@@ -66,8 +66,14 @@ class FaceDetector:
 
 
             cv2.circle(frame, pos, 1, color=(0, 0, 255))
-        #cv2.imshow("s",frame)  to show landmarks during training
 
+          #to show landmarks during training
+
+        #cv2.imshow("s", frame)
+        #gray = cv2.cvtColor(
+         #   frame,
+          #  cv2.COLOR_RGB2GRAY)
+        #cv2.imwrite("facelandmark.png", gray)
         return True , np.array(landmark_list)
 
 

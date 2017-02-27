@@ -11,6 +11,15 @@ from matplotlib import pyplot as plt
 from sklearn import svm
 from sklearn import datasets
 import cPickle as pickle
+from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
+
+from sklearn.metrics import recall_score
+
+from sklearn.metrics import precision_score
+#from sklearn.model_selection import cross_val_score
+
+
 
 __author__ = "Michael Beyeler"
 __license__ = "GNU GPL 3.0 or later"
@@ -28,23 +37,17 @@ class Classifier:
     def evaluate(self, X_test, y_test, visualize=False):
         pass
 
-    def _accuracy(self, y_test, Y_vote):
 
-        # predicted classes
-        y_hat = np.argmax(Y_vote, axis=1)
-
-        # all cases where predicted class was correct
-        mask = y_hat == y_test
-        return np.count_nonzero(mask)*1. / len(y_test)
 
     def _precision(self, y_test, Y_vote):
 
         # predicted classes
-        y_hat = np.argmax(Y_vote, axis=1)
+        #y_hat = np.argmax(Y_vote, axis=1)
+        self.mode="one-vs-one"
 
         if self.mode == "one-vs-one":
             # need confusion matrix
-            conf = self._confusion(y_test, Y_vote)
+            conf  = confusion_matrix(y_test, Y_vote)
 
             # consider each class separately
             prec = np.zeros(self.num_classes)
@@ -63,13 +66,16 @@ class Classifier:
             prec = np.zeros(self.num_classes)
             for c in xrange(self.num_classes):
                 # true positives: label is c, classifier predicted c
-                tp = np.count_nonzero((y_test == c) * (y_hat == c))
+                tp = np.count_nonzero((y_test == c) * (Y_vote == c))
 
                 # false positives: label is c, classifier predicted not c
-                fp = np.count_nonzero((y_test == c) * (y_hat != c))
+                fp = np.count_nonzero((y_test == c) * (Y_vote != c))
 
                 if tp + fp != 0:
                     prec[c] = tp * 1. / (tp + fp)
+        print tp
+        print fp
+        print prec
         return prec
 
     def _recall(self, y_test, Y_vote):
@@ -105,17 +111,6 @@ class Classifier:
                     recall[c] = tp * 1. / (tp + fn)
         return recall
 
-    def _confusion(self, y_test, Y_vote):
-
-        y_hat = np.argmax(Y_vote, axis=1)
-        conf = np.zeros((self.num_classes, self.num_classes)).astype(np.int32)
-        for c_true in xrange(self.num_classes):
-            # looking at all samples of a given class, c_true
-            # how many were classified as c_true? how many as others?
-            for c_pred in xrange(self.num_classes):
-                y_this = np.where((y_test == c_true) * (y_hat == c_pred))
-                conf[c_pred, c_true] = np.count_nonzero(y_this)
-        return conf
 
 
 class SVM(Classifier):
@@ -136,9 +131,7 @@ class SVM(Classifier):
 
         f.close()
 
-    def save(self, file):
 
-        self.model.save(file)
 
     def fit(self, X_train, y_train):
 
@@ -149,6 +142,7 @@ class SVM(Classifier):
 
         self.model = svm.SVC(kernel='linear', probability=True, tol=1e-3, verbose = True)
         self.model.fit(X_train, y_train)
+        #----save the svm model--------------
         f = open("params/svm.pkl", 'wb')
         pickle.dump(self.model,f)
         print "Creating Model Complete-------"
@@ -156,7 +150,7 @@ class SVM(Classifier):
     def predict(self, X_test):
         X_test = np.squeeze(np.array(X_test)).astype(np.float32)
         y_hat = self.model.predict(X_test)
-
+        print self.model.predict_proba(X_test)
 
         # find the most active cell in the output layer
         #y_hat = np.argmax(y_hat, 1)
@@ -168,14 +162,17 @@ class SVM(Classifier):
 
         # need int labels
         y_test = self._labels_str_to_num(y_test)
-
+        pred_lin = self.model.score(X_test, y_test)
+        print "acuuracy"
+        print  pred_lin
         # predict labels
-        ret, Y_vote = self.model.predict(X_test)
-        accuracy = self._accuracy(y_test, Y_vote)
-        precision = self._precision(y_test, Y_vote)
-        recall = self._recall(y_test, Y_vote)
+        Y_vote = self.model.predict(X_test)
 
-        return (accuracy, precision, recall)
+        confusion = confusion_matrix(y_test, Y_vote)
+        print confusion
+        self._precision( y_test, Y_vote)
+
+
 
     def _one_hot(self, y_train):
         """Converts a list of labels into a 1-hot code"""
@@ -193,3 +190,5 @@ class SVM(Classifier):
     def __labels_num_to_str(self, labels):
         """Converts a list of int labels to their corresponding strings"""
         return self.class_labels[labels]
+
+
