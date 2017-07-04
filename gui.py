@@ -35,7 +35,7 @@ class BaseLayout(wx.Frame):
     """
     __metaclass__ = makecls(ABCMeta)
 
-    def __init__(self, capture, title=None, parent=None, id=-1, fps=7):
+    def __init__(self, capture, title=None, parent=None, id=-1, fps=5):
         """Class constructor
 
             This method initializes all necessary parameters and generates a

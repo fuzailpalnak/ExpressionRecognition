@@ -2,19 +2,18 @@
 import cv2
 import numpy as np
 import dlib
-import time
 import wx
 from os import path
 import cPickle as pickle
 
-# from datasets import homebrew
-from Facedetection import FaceDetector
-from classifier import SVM
+from detection_recognition.Facedetection import FaceDetector
+from classifier.classifier import SVM
 from gui import BaseLayout
+import openface
 
-import Landmark_Extract
+from create_dataset import Landmark_Extract
 
-
+from detection_recognition.Face_recognition import Face_Recognition
 
 
 
@@ -32,38 +31,47 @@ class FaceLayout(BaseLayout):
     def init_algorithm(
             self,
             save_training_file='datasets/train.pkl',
-            load_svm='params/svm.pkl',
-            face_casc='params/haarcascade_frontalface_default.xml',
+            load_svm='params/svm_landmark.pkl',
+            load_face_svm='params/face_classifier.pkl',
 
-            landmark_data="shape_predictor_68_face_landmarks.dat",
+            landmark_data="params/shape_predictor_68_face_landmarks.dat",
+            face_recognition_model_path="params/dlib_face_recognition_resnet_model_v1.dat"
+
     ):
         self.predictor = dlib.shape_predictor(landmark_data)
         self.data_file = save_training_file
-        self.faces = FaceDetector(face_casc)
+        self.detector = dlib.get_frontal_face_detector()
+        self.face_recognition_model=dlib.face_recognition_model_v1(face_recognition_model_path)
+        self.alignedFace = openface.AlignDlib(landmark_data)
+
+
+
+        self.faces = FaceDetector(self.detector,self.predictor,self.alignedFace)
         # ----------Initialize the FaceDetector Constructor-----------------
 
         self.landmark_points = None
         self.dlib_rect=None
-
+        self.dlib_face=None
+        self.x=0
+        self.y=0
+        self.i=0
         # load preprocessed dataset to access labels and PCA params
         if path.isfile(save_training_file):
             (X_train, y_train) = Landmark_Extract.load_data(
                 "datasets/train.pkl", test_split=0.2, seed=40)
-            (X_test, y_test) = Landmark_Extract.load_test_data(
-                "datasets/test.pkl", test_split=0.2, seed=40)
 
             self.all_labels = np.unique(np.hstack(y_train))
             self. num_classes =len(self.all_labels)
+            self.SVM = SVM(self.all_labels, self.num_classes)
 
-            # load pre-trained multi-layer perceptron
+            # load pre-trained SVM
+            if path.isfile(load_face_svm):
+                face_model=self.SVM.load(load_face_svm,True)
+                self.face_encoder = Face_Recognition(self.face_recognition_model,face_model)
+
             if path.isfile(load_svm):
-                # if path.isfile(load_mlp):
-                # layer_sizes = np.array([self.pca_V.shape[1],len(self.all_labels)])
-                self.SVM = SVM(self.all_labels ,self.num_classes)
                 self.SVM.load(load_svm)
-                print self.SVM
-                # svm=cv2.SVM()
-                # svm.load(load_svm)
+                print "SVM Loaded"
 
             else:
                 print "Warning: Testing is disabled"
@@ -85,6 +93,7 @@ class FaceLayout(BaseLayout):
         hbox1 = wx.BoxSizer(wx.HORIZONTAL)
         hbox1.Add(self.training, 1)
         hbox1.Add(self.testing, 1)
+
         pnl1.SetSizer(hbox1)
 
 
@@ -120,29 +129,50 @@ class FaceLayout(BaseLayout):
 
     def _process_frame(self, frame):
 
-        # -------------------------- detect face----------------------------------------
-        success, self.frame, self.landmark_points, self.dlib_rect,(x,y) = self.faces.detect(frame)
 
+        # -------------------------- detect face----------------------------------------
+
+
+        self.frame, self.dlib_face = self.faces.detect_dlib(frame)
+        if len(self.dlib_face) > 0:
+            #print len(self.dlib_face)
+            for face in self.dlib_face:
+                self.x,self.y=self.faces.bbox(face,self.frame)
+            success=True
+        else:
+            success=False
 
         # since testing is disabled 'if' part won't run until dataset is trained atleast once
 
         if success and self.testing.GetValue():
 
 
-            success, landmark_points = self.faces.align_head(self.landmark_points,self.dlib_rect,self.predictor,self.frame)
+            success, landmark_points,landmark_points_dlib_format = self.faces.align_head(self.frame,self.dlib_face,True)
+            if self.i % 9==0:
+                success,self.prediction=self.face_encoder.Face_Rec(self.frame,landmark_points_dlib_format)
+
 
             if success:
 
 
 
+                # predict label with pre-trained SVM
+                # print "here"
+                self.i=self.i+1
 
-                # predict label with pre-trained MLP
-                label = self.SVM.predict(landmark_points.flatten())
+                for i, face in enumerate(self.dlib_face):
+                    self.x, self.y = self.faces.bbox(face, frame)
+
+                    label ,probability= self.SVM.predict(landmark_points[i])
 
                 # draw label above bounding box
-                cv2.putText(frame, str(label), (x, y - 20),
-                            cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+                    text=str(label[0])+str(int(max(probability[0])*100))+str('%')
+                    cv2.putText(frame, text, (self.x, self.y - 20),
+                                cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(frame, self.prediction[i], (self.x-150, self.y + 20),
+                                cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
 
+                #cv2.imwrite("exp.png",cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY))
 
         return frame
 
@@ -165,7 +195,14 @@ class FaceLayout(BaseLayout):
         self.angry.Disable()
         self.disgust.Disable()
         self.snapshot.Disable()
-
+    def _on_trainImages(self,evt):
+        self.neutral.Disable()
+        self.happy.Disable()
+        self.sad.Disable()
+        self.surprise.Disable()
+        self.angry.Disable()
+        self.disgust.Disable()
+        self.snapshot.Disable()
     def _on_snapshot(self, evt):
         """Takes a snapshot of the current frame
 
@@ -189,9 +226,10 @@ class FaceLayout(BaseLayout):
         if self.landmark_points is None:
             print "No face detected"
         else:
-
-            success, landmark_points = self.faces.align_head(self.landmark_points,self.dlib_rect,self.predictor,self.frame)
-
+            if len(self.dlib_face)==1:
+                success, landmark_points = self.faces.align_head(self.frame, self.dlib_face, False)
+            else:
+                print "MORE THAN ONE FACE DETECTED"
             #print landmark_points.flatten()
             if success:
                 print "Added sample to training set"
